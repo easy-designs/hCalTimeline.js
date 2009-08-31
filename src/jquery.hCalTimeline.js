@@ -172,21 +172,20 @@ Note:           If you change or improve on this script, please let us know by
       
       // adjust the heights as necessary, starting from the end
       $event = $timeline.children('li:last');
-      var i = 0;
       while ( $event.length === 1 )
       {
         $flag  = $event.find('.vevent');
         height = $event.height();
         
-        var j = 0;
         $event.nextAll('li').reverse().each(function(){
           $next = $(this).find('.vevent');
           while ( isOverlapping( $flag, $next ) )
           {
-            height = height + 20;
-            $event.height(height);  
+            timeline_width += (height/2);
+            height += (height/2);
+            $event.height(height);
+            $timeline.width(timeline_width);
           }
-          j++;
         });
         
         if ( height > timeline_height )
@@ -196,8 +195,9 @@ Note:           If you change or improve on this script, please let us know by
         }
         
         $event = $event.prev('li');
-        i++;
       }
+      // reset the scale
+      scale = ( $timeline.end_date.getTime() - $timeline.start_date.getTime() ) / ( timeline_width - space );
       
       // add to the stage
       $stage = $els.div.clone().addClass(settings.namespace + 'stage')
@@ -210,7 +210,7 @@ Note:           If you change or improve on this script, please let us know by
       $timeline.after($measure);
       start = $timeline.start_date;
       for ( current = start.getFullYear(), end = $timeline.end_date.getFullYear();
-            current <= end; current++ )
+            current < end; current++ )
       {
         position = Math.floor( ( ( new Date( current, 0, 1 ).getTime() - start.getTime() ) / scale ) / timeline_width * 100 );
         $els.li.clone().text(current)
