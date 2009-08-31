@@ -16,6 +16,7 @@ Note:           If you change or improve on this script, please let us know by
       new hCalTimeline( this, settings );
     });
   };
+  $.fn.reverse = [].reverse;
   
   var hCalTimeline = function( content, settings )
   {
@@ -62,14 +63,17 @@ Note:           If you change or improve on this script, please let us know by
       '.' + settings.namespace + 'contained { overflow: hidden; height: 200px; }' +
       '.' + settings.namespace + 'timeline { position: relative; list-style: none; border-bottom: 10px solid; margin: 0; padding: 0; }' +
       '.' + settings.namespace + 'stage .' + settings.namespace + 'timeline { position: absolute; top: 0; left: 0; min-width: 100%; }' +
-      '.' + settings.namespace + 'event { position: absolute; }' +
+      '.' + settings.namespace + 'event { position: absolute; bottom: 0; border: 1px solid; border-bottom: 10px solid; width: 0; }' +
+      '.' + settings.namespace + 'event .vevent { position: absolute; top: 0; }' +
+      '.' + settings.namespace + 'measure { position: absolute; bottom: -1em; list-style: none; margin: 0; padding: 0; }' +
+      '.' + settings.namespace + 'measure li { position: absolute; margin: 0; padding: 0; }' +
       '';
     
     
     
     function initialize()
     {
-      var timeline_height, event_height, scale, space;
+      var timeline_height, event_height, scale, space, start, end, current, position, $event, $next, $flag, height;
       
       // apply the styles
       if ( $('style#'+settings.style_id).length < 1 )
@@ -86,9 +90,10 @@ Note:           If you change or improve on this script, please let us know by
       // events
       $content.find('.vevent').each(function(){
         var
-        $this = $(this),
-        $event = $els.li.clone().html($this.html())
-                                .attr('class',$this.attr('class'))
+        $this  = $(this), year,
+        $flag  = $els.div.clone().html($this.html())
+                                 .attr('class',$this.attr('class')),
+        $event = $els.li.clone().append($flag)
                                 .addClass(settings.namespace + 'event')
                                 .appendTo($timeline);
         
@@ -117,21 +122,27 @@ Note:           If you change or improve on this script, please let us know by
         // update the widths
         if ( settings.event_x )
         {
-          $event.width(settings.event_x);
+          $flag.width(settings.event_x);
           timeline_width += settings.event_x;
         }
         else
         {
-          timeline_width += $event.width();
+          timeline_width += $flag.width();
         }
         // update the height
-        event_height = $event.height();
+        event_height = $flag.height();
+        $event.height(event_height);
         if ( event_height > timeline_height )
         {
           timeline_height = event_height;
         }
         
       });
+      
+      // set the start and end dates to January 1st
+      $timeline.start_date = new Date( $timeline.start_date.getFullYear(), 0, 1 );
+      $timeline.end_date = new Date( $timeline.end_date.getFullYear() + 1, 0, 1 );
+      
       // assign the initial dimensions to the timeline
       $timeline.width(timeline_width).height(timeline_height);
       
@@ -150,28 +161,67 @@ Note:           If you change or improve on this script, please let us know by
         // find the starting edge
         start = Math.floor( ( ( start.getTime() - $timeline.start_date.getTime() ) / scale ) / timeline_width * 100 );
         $this.css((settings.direction=='ltr'?'left':'right'),start+'%');
+        $this.find('.vevent').css((settings.direction=='ltr'?'left':'right'),0);
         
         if ( end instanceof Date )
         {
           $this.width( Math.floor( ( end.getTime() - start.getTime() ) / scale ) );
         }
+      })
+      .height(timeline_height);
+      
+      // adjust the heights as necessary, starting from the end
+      $event = $timeline.children('li:last');
+      var i = 0;
+      while ( $event.length === 1 )
+      {
+        $flag  = $event.find('.vevent');
+        height = $event.height();
         
-        // TODO: check for overlaps & reposition events or grow timeline to accomodate
+        var j = 0;
+        $event.nextAll('li').reverse().each(function(){
+          $next = $(this).find('.vevent');
+          while ( isOverlapping( $flag, $next ) )
+          {
+            height = height + 20;
+            $event.height(height);  
+          }
+          j++;
+        });
         
-      });
+        if ( height > timeline_height )
+        {
+          timeline_height = height;
+          $timeline.height(height);
+        }
+        
+        $event = $event.prev('li');
+        i++;
+      }
       
       // add to the stage
-      $stage = $els.div.clone().addClass(settings.namespace + 'stage');
+      $stage = $els.div.clone().addClass(settings.namespace + 'stage')
+                               .height(timeline_height);
       $timeline.wrap($stage);
       
       // create the measure
-      $measure = $els.ol.clone().addClass(settings.namespace + 'measure');
-      // TODO: determine the years and append a LI for each.
+      $measure = $els.ol.clone().addClass(settings.namespace + 'measure')
+                                .width(timeline_width);
+      $timeline.after($measure);
+      start = $timeline.start_date;
+      for ( current = start.getFullYear(), end = $timeline.end_date.getFullYear();
+            current <= end; current++ )
+      {
+        position = Math.floor( ( ( new Date( current, 0, 1 ).getTime() - start.getTime() ) / scale ) / timeline_width * 100 );
+        $els.li.clone().text(current)
+                       .css((settings.direction=='ltr' ? 'left' : 'right' ),position+'%')
+                       .appendTo($measure);
+      }
       
       // wrap?
       if ( settings.contain )
       {
-        $stage.addClass(settings.namespace + 'contained').height(timeline_height);
+        $stage.addClass(settings.namespace + 'contained');
       }
     }
     
@@ -188,7 +238,55 @@ Note:           If you change or improve on this script, please let us know by
     }
     
     // utils
-    function parseDate( string )
+    function isOverlapping( subject, object )
+    {
+      var s, o,
+      $subject = $(subject),
+      $object  = $(object),
+      width    = $object.outerWidth(),
+      height   = $object.outerHeight();
+      
+      // figure out the 4 corners of $subject & $object
+      s = getCorners( $subject );
+      o = getTrueOffsets( $object );
+      
+      switch ( true )
+      {
+        case isOver( s.top, s.left, o.top, o.left, height, width ):
+        case isOver( s.top, s.right, o.top, o.left, height, width ):
+        case isOver( s.bottom, s.left, o.top, o.left, height, width ):
+        case isOver( s.bottom, s.right, o.top, o.left, height, width ):
+          return true;
+      }
+      return false;
+    }
+    function getCorners( $el )
+    {
+      $el.offset = getTrueOffsets( $el );
+  		return {
+  		  top:    $el.offset.top,
+  		  right:  $el.offset.left + $el.outerWidth(),
+  		  bottom: $el.offset.top + $el.outerHeight(),
+  		  left:   $el.offset.left  		  
+  		};
+    }
+    function getTrueOffsets( $el )
+    {
+      $el.offset = $el.offset();
+      return {
+  			top: $el.offset.top + ( parseInt( $el.css('margin-left'), 10 ) || 0 ),
+  			left: $el.offset.left + ( parseInt( $el.css('margin-top'), 10 ) || 0 )
+  		};
+    }
+    function isOver( y, x, top, left, height, width )
+  	{
+      return isOverAxis( y, top, height ) && isOverAxis( x, left, width );
+  	}
+    function isOverAxis( x, reference, size )
+    {
+  		return ( x >= reference ) && ( x <= ( reference + size ) );
+  	}
+  	function parseDate( string )
     {
       /* A conversion of Paul Sowden's extension to the Date object
        * http://delete.me.uk/2005/03/iso8601.html */

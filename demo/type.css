@@ -41,50 +41,8 @@ p {
   line-height: 1.5;
   margin: 0 0 1.5em;
 }
-#copyright {
-  font-size: 1em;
-  font-style: italic;
-  line-height: 1.2;
-}
 
 /* =Lists */
-dl {
-  font-size: 1.2em;
-  line-height: 1.5;
-  margin: 0 0 1.5em;
-}
-dt {
-  font-weight: bold;
-  padding: 0 1em 0 0;
-  text-align: right;
-  white-space: nowrap;
-  width: 100px;
-  float: left;
-  clear: left;
-}
-dt:after {
-  content: ':';
-}
-dl:after {
-  clear: both;
-  content: '.';
-  display: block;
-  height: 0;
-  visibility: hidden;
-}
-dl.single:after {
-  display: none;
-}
-dl.single dt,
-dl.single dd {
-  float: none;
-  display: inline;
-  white-space: normal;
-}
-dl.single dt {
-  padding: 0;
-  width: auto;
-}
 ol, ul {
   font-size: 1.2em;
   line-height: 1.5;
